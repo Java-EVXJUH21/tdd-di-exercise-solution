@@ -11,27 +11,32 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class ProfileModule {
 
-    private final MongoDatabase mongoDatabase;
-    private final MongoCollection<Document> profileCollection;
+    /*
+
+    Koden har en massa buggar och kompileringsfel. Poängen här är att visa
+    principerna.
+
+     */
+
+    private final DataStorage storage;
     private final Map<UUID, Profile> cachedProfiles;
 
-    public ProfileModule(MongoDatabase db) {
-        this.mongoDatabase = db;
-        this.profileCollection = db.getCollection("profiles");
+    public ProfileModule(DataStorage storage) {
+        this.storage = storage;
         this.cachedProfiles = new ConcurrentHashMap<>();
     }
 
     public Profile loadProfile(UUID profileId, String updatedName) {
-        var iterable = profileCollection.find(Filters.eq("_id", profileId));
-        for (var document : iterable) {
-            var profile = new Profile(profileId, document);
+        var existing = storage.find(profileId);
+        if (existing.isPresent()) {
+            var profile = existing.get();
             profile.setUsername(updatedName);
             cachedProfiles.put(profileId, profile);
             return profile;
         }
 
         var profile = new Profile(profileId, updatedName);
-        profileCollection.insertOne(profile.toDocument());
+        storage.save(profile);
         cachedProfiles.put(profileId, profile);
         return profile;
     }
@@ -42,7 +47,7 @@ public class ProfileModule {
     }
 
     public void saveProfile(Profile profile) {
-        profileCollection.replaceOne(Filters.eq("_id", profile.getUniqueId()), profile.toDocument());
+        storage.replace(profile.getUniqueId(), profile);
     }
 
     public Profile get(UUID profileId) {
